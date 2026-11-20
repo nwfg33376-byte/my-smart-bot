@@ -32,9 +32,8 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-
-    def ask_ai(user_text, store_info=""):
-                system_prompt = "أنت موظف خدمة عملاء ومحاسب محترف لمتجر إلكتروني سعودي. تحدث باللهجة السعودية البيضاء بلباقة وسرعة. معلومات المتجر: " + str(store_info)
+def ask_ai(user_text, store_info=""):
+    system_prompt = "أنت موظف خدمة عملاء ومحاسب محترف لمتجر إلكتروني سعودي. تحدث باللهجة السعودية البيضاء بلباقة وسرعة. معلومات المتجر: " + str(store_info)
     completion = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[
