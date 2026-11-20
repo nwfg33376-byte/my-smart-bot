@@ -161,7 +161,7 @@ def handle_receipt(message):
     bot.send_message(ADMIN_ID, f"💰 إيصال جديد من: {name}", reply_markup=markup)
     bot.reply_to(message, "⏳ تم استلام الإيصال، سيتم التفعيل خلال لحظات...")
 
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(content_types=['text'], func=lambda message: True)
 def handle_all_messages(message):
     user_id = str(message.chat.id)
     data = load_data()
