@@ -74,7 +74,7 @@ def whatsapp_webhook(merchant_id):
             reply_text = ask_ai(customer_text, merchant.get("store_info", ""))
             instance_id = merchant.get("wa_instance")
             wa_token = merchant.get("wa_token")
-            url = f"https://ultramsg.com{instance_id}/messages/chat"
+            url = "https://api.ultramsg" + ".com/" + instance_id + "/messages/chat"
             requests.post(url, data={"token": wa_token, "to": customer_phone, "body": reply_text})
     except Exception as e:
         print("WA Error:", e)
@@ -133,7 +133,7 @@ def handle_callbacks(call):
     
     elif call.data == "connect_wa":
         user_states[user_id] = "WAITING_WA_DATA"
-        webhook_link = f"https://onrender.com{user_id}"
+        webhook_link = "https://my-smart-bot-5uqf" + ".onrender" + ".com/whatsapp/" + user_id
         bot.send_message(
             user_id,
             f"📱 **دليل ربط رقمك في الواتساب بالبوت في 3 دقائق:**\n\n"
