@@ -204,7 +204,7 @@ def handle_all_messages(message):
         reply = ask_ai(message.text, store_info)
         bot.reply_to(message, reply)
     except Exception as e:
-    bot.reply_to(message, f"السبب التقني: {e}")
+        bot.reply_to(message, f"السبب التقني: {e}")
 
 print("البوت الشامل يعمل الآن 24/7...")
 bot.infinity_polling(timeout=10, long_polling_timeout=5)
