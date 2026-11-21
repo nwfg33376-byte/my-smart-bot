@@ -75,7 +75,7 @@ def whatsapp_webhook(merchant_id):
     return "OK", 200
 
 # ==========================================
-# 3. لوحة تحكم التاجر داخل تليجرام
+# 3  لوحة تحكم التاجر داخل تليجرام
 def get_main_menu():
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
