@@ -32,10 +32,11 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
 def ask_ai(user_text, store_info=""):
     system_prompt = "أنت موظف خدمة عملاء ومحاسب محترف لمتجر إلكتروني سعودي. تحدث باللهجة السعودية البيضاء بلباقة وسرعة. معلومات المتجر: " + str(store_info)
     completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text}
@@ -75,7 +76,7 @@ def whatsapp_webhook(merchant_id):
     return "OK", 200
 
 # ==========================================
-# 3  لوحة تحكم التاجر داخل تليجرام
+# 3. لوحة تحكم التاجر داخل تليجرام
 def get_main_menu():
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
