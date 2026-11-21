@@ -74,18 +74,8 @@ def whatsapp_webhook(merchant_id):
         print("WA Error:", e)
     return "OK", 200
 
-@app.route('/')
-def home():
-    return "Smart Multi-Merchant Bot (Telegram + WhatsApp) is Live!"
-
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-threading.Thread(target=run_web, daemon=True).start()
-
 # ==========================================
-# 3. لوحة تحكم التاجر داخل تليجرام (تشرح له كل شيء ذاتياً)
+# 3. لوحة تحكم التاجر داخل تليجرام
 def get_main_menu():
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
@@ -205,5 +195,22 @@ def handle_all_messages(message):
     except Exception as e:
         bot.reply_to(message, f"السبب التقني: {e}")
 
-print("البوت الشامل يعمل الآن 24/7...")
-bot.infinity_polling(timeout=10, long_polling_timeout=5)
+# ==========================================
+# 4. تشغيل البوت بنظام Webhook الفوري الذي لا يتوقف أبداً
+@app.route('/' + TELEGRAM_TOKEN, methods=['POST'])
+def telegram_webhook():
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "OK", 200
+
+@app.route('/')
+def home():
+    webhook_url = "https://my-smart-bot-5uqf" + ".onrender" + ".com/" + TELEGRAM_TOKEN
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    return "Smart Multi-Merchant Bot (Webhook Mode) is 100% Alive!"
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
