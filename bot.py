@@ -1,7 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from groq import Groq
-from flask import Flask, request
 import requests
 import json
 import os
@@ -13,21 +12,16 @@ from datetime import datetime, timedelta
 # 1. إعداداتكِ الأساسية (ضعي مفاتيحكِ هنا)
 TELEGRAM_TOKEN = "9209111321:AAHvZ3B5KUUK0aeZBVCUtu9vKnVnU9tGID8"
 GROQ_API_KEY = "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"
-
-# بيانات بوابة الدفع StreamPay (ستريم باي)
 STREAMPAY_API_KEY = "ضعي_مفتاح_STREAMPAY_هنا"
-SUBSCRIPTION_PRICE = 1020  # 1020 ريال لتصلكِ 1000 ريال صافية في حسابكِ بعد رسوم مدى
 
-# رابط سيرفركِ الداخلي (مخفي تماماً عن التجار)
+SUBSCRIPTION_PRICE = 1020  # 1020 ريال لتصلكِ 1000 ريال صافية في حسابكِ
 INTERNAL_SERVER_URL = "https://pythonanywhere.com"
 ADMIN_ID = 1519768480
 # ==========================================
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 client = Groq(api_key=GROQ_API_KEY)
-app = Flask(__name__)
-
-DATA_FILE = "merchants_db.json"
+DATA_FILE = "/home/Smartbots11/merchants_db.json"
 user_states = {}
 db_lock = threading.Lock()
 
@@ -47,7 +41,7 @@ def save_data(data):
             json.dump(data, f, ensure_ascii=False, indent=4)
 
 # ==========================================
-# 2. الذكاء الاصطناعي المنضبط (يمنع الأرقام والإيميلات المزورة)
+# 2. الذكاء الاصطناعي الصارم (يمنع الأرقام والإيميلات المزورة)
 def ask_ai(user_text, store_info=""):
     if not store_info.strip():
         return "أهلاً بك! المتجر قيد التجهيز حالياً، يرجى ترك رسالتك وسنرد عليك في أقرب وقت."
@@ -70,13 +64,13 @@ def ask_ai(user_text, store_info=""):
                 {"role": "user", "content": user_text}
             ]
         )
-        return completion.choices[0].message.content
+        return completion.choices.message.content
     except Exception as e:
         print("AI Error:", e)
         return "عذراً، واجهت ضغطاً بسيطاً في النظام، أعد إرسال رسالتك بعد لحظات."
 
 # ==========================================
-# 3. إنشاء رابط دفع تلقائي عبر StreamPay (بدون إظهار الآيبان)
+# 3. بوابة الدفع الآلية StreamPay (بدون إظهار الآيبان)
 def create_streampay_link(merchant_id, merchant_name):
     url = "https://streampay.sa"
     headers = {
@@ -87,136 +81,123 @@ def create_streampay_link(merchant_id, merchant_name):
         "amount": SUBSCRIPTION_PRICE,
         "currency": "SAR",
         "description": f"اشتراك شهري (30 يوم) - المساعد الذكي للمتاجر ({merchant_name})",
-        "callback_url": f"{INTERNAL_SERVER_URL}/streampay_webhook",
-        "metadata": {
-            "merchant_id": str(merchant_id)
-        }
+        "metadata": {"merchant_id": str(merchant_id)}
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
         if res.status_code in (200, 201):
             res_data = res.json()
-            return res_data.get("payment_url") or res_data.get("url")
+            return res_data.get("payment_url") or res_data.get("url"), res_data.get("id")
     except Exception as e:
         print("StreamPay Error:", e)
-    return None
+    return None, None
 
 def send_payment_prompt(user_id, merchant_name="تاجر"):
-    pay_url = create_streampay_link(user_id, merchant_name)
-    markup = InlineKeyboardMarkup()
+    pay_url, invoice_id = create_streampay_link(user_id, merchant_name)
+    if invoice_id:
+        data = load_data()
+        if user_id in data:
+            data[user_id]["last_invoice_id"] = invoice_id
+            save_data(data)
+
+    markup = InlineKeyboardMarkup(row_width=1)
     if pay_url:
-        markup.add(InlineKeyboardButton(f"💳 ادفع الآن ({SUBSCRIPTION_PRICE} ريال) وفعّل شهرك تلقائياً", url=pay_url))
-    else:
-        markup.add(InlineKeyboardButton("🔄 تحديث رابط الدفع", callback_data="check_sub"))
+        markup.add(InlineKeyboardButton(f"💳 ادفع الآن ({SUBSCRIPTION_PRICE} ريال) عبر البطاقة", url=pay_url))
+    markup.add(InlineKeyboardButton("✅ تم الدفع — تفعيل اشتراكي الآن", callback_data="verify_payment"))
 
     msg = (
         "⚠️ **انتهت مدة تجربتك / اشتراكك الحالي!**\n\n"
         "لتفعيل البوت لمتجرك لمدة **30 يوماً كاملة**، اضغط على زر الدفع بالأسفل.\n"
         f"💰 **قيمة الاشتراك الشهري:** `{SUBSCRIPTION_PRICE} ريال سعودي` (شاملة رسوم الدفع الإلكتروني).\n\n"
-        "⚡ **بمجرد إتمام الدفع بالبطاقة (مدى / فيزا / Apple Pay)، سيتفعل اشتراكك تلقائياً في نفس الثانية!**"
+        "⚡ **بعد إتمام الدفع بالبطاقة، سيتفعل اشتراكك تلقائياً خلال ثوانٍ!**"
     )
     try:
         bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
-        print("Send Payment Prompt Error:", e)
+        print("Send Payment Error:", e)
 
-# استقبال إشعار الدفع الناجح من StreamPay وتفعيل الـ 30 يوماً تلقائياً
-@app.route('/streampay_webhook', methods=['POST'])
-def streampay_webhook():
-    payload = request.json or {}
-    status = str(payload.get("status", "")).lower()
-    metadata = payload.get("metadata", {})
-    merchant_id = str(metadata.get("merchant_id", ""))
-
-    if status in ("paid", "succeeded", "completed") and merchant_id:
-        data = load_data()
-        if merchant_id in data:
-            new_expiry = datetime.now() + timedelta(days=30)
-            data[merchant_id]["expiry"] = new_expiry.isoformat()
-            data[merchant_id]["notified_expired"] = False
-            save_data(data)
-            try:
-                bot.send_message(
-                    merchant_id,
-                    f"🎉 **تم استلام دفعتك وتفعيل اشتراكك لمدة 30 يوماً كاملة تلقائياً!**\n"
-                    f"📅 **ينتهي اشتراكك القادم في:** `{new_expiry.strftime('%Y-%m-%d الساعة %H:%M')}`",
-                    parse_mode="Markdown"
-                )
-            except Exception:
-                pass
-    return "OK", 200
+def verify_invoice_paid(invoice_id):
+    if not invoice_id:
+        return False
+    url = f"https://streampay.sa/{invoice_id}"
+    headers = {"Authorization": f"Bearer {STREAMPAY_API_KEY}"}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            status = str(res.json().get("status", "")).lower()
+            return status in ("paid", "succeeded", "completed")
+    except Exception:
+        pass
+    return False
 
 # ==========================================
-# 4. فحص تلقائي في الخلفية لإرسال تنبيه الدفع فور انتهاء الوقت
-def subscription_watcher():
+# 4. مراقب الاشتراكات + قارئ رسائل الواتساب في الخلفية
+def background_worker():
     while True:
         try:
             data = load_data()
             now = datetime.now()
             changed = False
+
             for uid, info in data.items():
                 expiry = datetime.fromisoformat(info["expiry"])
+
+                # 1. التحقق الآلي من الفواتير المدفوعة في StreamPay
+                if now > expiry and info.get("last_invoice_id"):
+                    if verify_invoice_paid(info["last_invoice_id"]):
+                        new_expiry = datetime.now() + timedelta(days=30)
+                        data[uid]["expiry"] = new_expiry.isoformat()
+                        data[uid]["notified_expired"] = False
+                        data[uid]["last_invoice_id"] = ""
+                        changed = True
+                        try:
+                            bot.send_message(
+                                uid,
+                                f"🎉 **تم تأكيد دفعتك وتفعيل اشتراكك لمدة 30 يوماً كاملة تلقائياً!**\n"
+                                f"📅 **ينتهي اشتراكك القادم في:** `{new_expiry.strftime('%Y-%m-%d الساعة %H:%M')}`",
+                                parse_mode="Markdown"
+                            )
+                        except Exception:
+                            pass
+                        continue
+
+                # 2. إرسال تنبيه انتهاء الاشتراك تلقائياً فور انتهاء الوقت
                 if now > expiry and not info.get("notified_expired", False):
                     send_payment_prompt(uid, info.get("name", "تاجر"))
                     data[uid]["notified_expired"] = True
                     changed = True
+
+                # 3. استقبال والرد على رسائل الواتساب لكل تاجر نشط (معزول 100%)
+                if now <= expiry and info.get("wa_instance") and info.get("wa_token"):
+                    id_inst = info["wa_instance"]
+                    wa_tok = info["wa_token"]
+                    rec_url = f"https://green-api.com{id_inst}/receiveNotification/{wa_tok}"
+                    res = requests.get(rec_url, timeout=5)
+                    if res.status_code == 200 and res.json():
+                        notif = res.json()
+                        receipt_id = notif.get("receiptId")
+                        body = notif.get("body", {})
+                        if body.get("typeWebhook") == "incomingMessageReceived":
+                            sender = body.get("senderData", {}).get("chatId", "")
+                            text = body.get("messageData", {}).get("textMessageData", {}).get("textMessage", "")
+                            if text and sender and not sender.endswith("@g.us"):
+                                reply_text = ask_ai(text, info.get("store_info", ""))
+                                send_url = f"https://green-api.com{id_inst}/sendMessage/{wa_tok}"
+                                requests.post(send_url, json={"chatId": sender, "message": reply_text}, timeout=10)
+                        if receipt_id:
+                            del_url = f"https://green-api.com{id_inst}/deleteNotification/{wa_tok}/{receipt_id}"
+                            requests.delete(del_url, timeout=5)
+
             if changed:
                 save_data(data)
         except Exception as e:
-            print("Watcher Error:", e)
-        time.sleep(60)  # يفحص كل دقيقة
+            print("Worker Error:", e)
+        time.sleep(3)
 
-threading.Thread(target=subscription_watcher, daemon=True).start()
-
-# ==========================================
-# 5. ربط واستقبال رسائل الواتساب (معزول لكل تاجر بدقة 100%)
-def configure_whatsapp_webhook(id_instance, api_token, merchant_id):
-    # نضبط الرابط في الخلفية تلقائياً دون أن يراه التاجر
-    api_url = f"https://green-api.com{id_instance}/setSettings/{api_token}"
-    webhook_url = f"{INTERNAL_SERVER_URL}/whatsapp/{merchant_id}"
-    payload = {
-        "webhookUrl": webhook_url,
-        "incomingWebhook": "yes"
-    }
-    try:
-        res = requests.post(api_url, json=payload, timeout=10)
-        return res.status_code == 200
-    except Exception:
-        return False
-
-@app.route('/whatsapp/<merchant_id>', methods=['POST'])
-def whatsapp_webhook(merchant_id):
-    data = load_data()
-    if merchant_id not in data:
-        return "Merchant not found", 404
-
-    merchant = data[merchant_id]
-    # إيقاف الرد التلقائي إذا انتهى اشتراك التاجر
-    if datetime.now() > datetime.fromisoformat(merchant["expiry"]):
-        return "Subscription expired", 403
-
-    incoming = request.json or {}
-    try:
-        if incoming.get("typeWebhook") == "incomingMessageReceived":
-            sender_data = incoming.get("senderData", {})
-            message_data = incoming.get("messageData", {})
-            customer_chat_id = sender_data.get("chatId")
-            customer_text = message_data.get("textMessageData", {}).get("textMessage", "")
-
-            if customer_text and customer_chat_id and not customer_chat_id.endswith("@g.us"):
-                # يقرأ معلومات متجر هذا التاجر فقط (عزل تام)
-                reply_text = ask_ai(customer_text, merchant.get("store_info", ""))
-                id_inst = merchant.get("wa_instance")
-                wa_tok = merchant.get("wa_token")
-                if id_inst and wa_tok:
-                    send_url = f"https://green-api.com{id_inst}/sendMessage/{wa_tok}"
-                    requests.post(send_url, json={"chatId": customer_chat_id, "message": reply_text}, timeout=10)
-    except Exception as e:
-        print("WA Webhook Error:", e)
-    return "OK", 200
+threading.Thread(target=background_worker, daemon=True).start()
 
 # ==========================================
-# 6. واجهة البوت في تليجرام
+# 5. واجهة البوت في تيليجرام
 def get_main_menu():
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
@@ -235,6 +216,7 @@ def send_welcome(message):
             "name": message.from_user.first_name or "تاجر",
             "expiry": (datetime.now() + timedelta(hours=24)).isoformat(),
             "notified_expired": False,
+            "last_invoice_id": "",
             "store_info": "",
             "wa_instance": "",
             "wa_token": ""
@@ -246,3 +228,5 @@ def send_welcome(message):
         "👋 أهلاً بك في **المساعد الذكي للمتاجر**!\n"
         "يمكنك الآن إدارة متجرك، الرد على زبائنك بذكاء، وحساب الفواتير تلقائياً.\n\n"
         "🎁 لديك **24 ساعة تجربة مجانية** كاملة، وبعدها يتجدد الاشتراك شهرياً بـ **1020 ريال**.\n\n"
+        "اختر من القائمة بالأسفل:",
+        reply_markup=get_main_menu(),
